@@ -87,16 +87,31 @@ function AuthPage() {
               {mode === "signup" && (
                 <div>
                   <Label htmlFor="name">Your name</Label>
-                  <Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Alex" className="mt-1" />
+                  <Input id="name" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Alex" className="mt-1" />
                 </div>
               )}
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
+                <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
               </div>
               <div>
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1" />
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  required
+                  minLength={10}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1"
+                />
+                {mode === "signup" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    At least 10 characters, with uppercase, lowercase, and a number. Save it to your phone's password
+                    manager — Face ID / fingerprint will fill it in from then on.
+                  </p>
+                )}
               </div>
               <Button type="submit" disabled={busy} className="w-full rounded-full">
                 {busy ? "…" : mode === "signin" ? "Sign in" : "Create account"}
