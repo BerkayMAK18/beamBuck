@@ -1,0 +1,17 @@
+-- Restore anon EXECUTE on is_email_allowed(). A prior migration revoked it
+-- (comment there assumed the function is only reached via the profiles
+-- RLS policy, i.e. as `authenticated`), but src/routes/auth.tsx calls it
+-- as a pre-signup check via supabase.rpc(...) BEFORE the user has a
+-- session -- i.e. as `anon`. Without this grant every signup attempt
+-- fails with "permission denied for function is_email_allowed" instead
+-- of either succeeding or showing "not on the invite list." Confirmed via
+-- a live REST call against a fresh database (2026-07-08).
+--
+-- This does not reopen the signup-bypass issue: real enforcement is
+-- hook_enforce_signup_allowlist(), which the Supabase Auth service calls
+-- as supabase_auth_admin (see the "Before User Created" hook in
+-- SUPABASE.md), not as anon. The only thing this grant exposes is a
+-- boolean membership-check oracle (an anon caller can ask "is email X
+-- allowed?" one address at a time) -- unavoidable given the frontend
+-- needs to show a friendly pre-check error before calling signUp.
+GRANT EXECUTE ON FUNCTION public.is_email_allowed(text) TO anon;
