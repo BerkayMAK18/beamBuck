@@ -283,8 +283,8 @@ Storage policies live on `storage.objects`. Both buckets are private; SELECT is 
 Under Supabase **Authentication**:
 
 - **Providers → Email**: enabled. "Confirm email" is optional; the app works either way (during dev, auto-confirm is convenient).
-- **Policies → Leaked Password Protection (HIBP)**: **on** (recommended, more important once the app is publicly reachable).
-- **URL Configuration → Site URL**: your app's URL (`http://localhost:5173` in dev). The frontend passes `emailRedirectTo: window.location.origin` at sign-up, so add every hostname you use to the allowed redirect list.
+- **Providers → Email → Leaked Password Protection (HIBP)**: recommended if available — **requires Supabase Pro or higher**, not visible at all on the Free tier. Not worth upgrading for on its own; the invite allowlist + `hook_enforce_signup_allowlist` (§ above) is the real access boundary regardless.
+- **URL Configuration → Site URL**: your app's URL (`http://localhost:5173` in dev, your deployed domain in production). The frontend passes `emailRedirectTo: window.location.origin` at sign-up, so add every hostname you use to the allowed redirect list. Managed declaratively via `supabase/config.toml`'s `[auth]` section + `supabase config push` — see the warning comment at the top of that file before editing it.
 - **No** social providers required. If you want Google/Apple/etc., add them here — the app doesn't currently render provider buttons.
 
 ### ⚠️ Before you publish this app anywhere public (e.g. GitHub Pages)
