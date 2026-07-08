@@ -20,15 +20,13 @@ uri = "pg-functions://postgres/public/hook_enforce_signup_allowlist"
 
 # site_url / additional_redirect_urls: the app calls signUp/signIn with
 # emailRedirectTo: window.location.origin, and Supabase only honors
-# redirects that match site_url or this list. Was the fresh-project
-# default (localhost:3000) which doesn't match this app's actual dev
-# port (5173 per README, though the sandboxed dev server here auto-picks
-# 8080 — see vite.config.ts's "sandbox detection" comment). Update
-# additional_redirect_urls (and site_url once deployed) to match your
-# actual Cloudflare Pages domain when you deploy.
+# redirects that match site_url or this list. site_url is the deployed
+# Cloudflare Worker (production); localhost:5173 stays in the redirect
+# list for local dev testing. Update site_url again if you attach a
+# custom domain later.
 [auth]
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173"]
+site_url = "https://berkaymak18-beambuck.akdemir-berkay.workers.dev"
+additional_redirect_urls = ["http://localhost:5173", "https://berkaymak18-beambuck.akdemir-berkay.workers.dev"]
 
 [auth.mfa.totp]
 enroll_enabled = true
