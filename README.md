@@ -160,7 +160,21 @@ bun run build      # Vite/Nitro build; output goes to .output/ (Cloudflare-compa
 bun run preview    # preview the built app locally
 ```
 
-The build target defaults to Cloudflare Workers/Pages via Nitro. To deploy to Node instead, adjust the `nitro` preset in `vite.config.ts` (e.g. `preset: "node-server"`). See the [Nitro docs](https://nitro.build/deploy) for preset names.
+The build target defaults to Cloudflare Workers/Pages via Nitro. To deploy to Node instead, set `NITRO_PRESET=node-server` (or another [Nitro preset](https://nitro.build/deploy)) as an env var when building, or hard-pin one via `nitro: { preset: "..." }` in `vite.config.ts`.
+
+### 8. Deploying to GitHub Pages
+
+GitHub Pages only serves static files (no server runtime), so this repo ships `.github/workflows/deploy-pages.yml`, which builds with `NITRO_PRESET=github-pages` — Nitro's static-site preset — and deploys the result via `actions/deploy-pages`.
+
+To use it:
+
+1. **Repo Settings → Pages → Build and deployment → Source: "GitHub Actions."**
+2. **Repo Settings → Secrets and variables → Actions**, add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` (the same anon/public values from your `.env` — never the service role key).
+3. Push to `main`, or run the workflow manually from the Actions tab.
+
+The workflow uses `actions/configure-pages` to compute the right base path automatically (project page vs. `<user>.github.io` root repo vs. custom domain), which `vite.config.ts` and `src/router.tsx` pick up via `PAGES_BASE_PATH` / `import.meta.env.BASE_URL` — you shouldn't need to hardcode a repo name anywhere.
+
+> **Before you make this public, read the "⚠️ Before you publish this app anywhere public" section in `SUPABASE.md`.** GitHub Pages has no access control of its own — a public Pages site is reachable by anyone with the URL, and the invite allowlist only actually blocks signups once you've wired up the Auth Hook described there.
 
 ---
 
