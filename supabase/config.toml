@@ -13,14 +13,22 @@ project_id = "zysbriojsrnlxdgtkkbx"
 # Enforces the invite allowlist at signup (see SUPABASE.md and the
 # hook_enforce_signup_allowlist migration). Without this, anyone who calls
 # the Supabase Auth signup API directly bypasses the frontend's allowlist
-# pre-check entirely. This is the one deliberate change in this file.
+# pre-check entirely.
 [auth.hook.before_user_created]
 enabled = true
 uri = "pg-functions://postgres/public/hook_enforce_signup_allowlist"
 
+# site_url / additional_redirect_urls: the app calls signUp/signIn with
+# emailRedirectTo: window.location.origin, and Supabase only honors
+# redirects that match site_url or this list. Was the fresh-project
+# default (localhost:3000) which doesn't match this app's actual dev
+# port (5173 per README, though the sandboxed dev server here auto-picks
+# 8080 — see vite.config.ts's "sandbox detection" comment). Update
+# additional_redirect_urls (and site_url once deployed) to match your
+# actual Cloudflare Pages domain when you deploy.
 [auth]
-site_url = "http://localhost:3000"
-additional_redirect_urls = []
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
 
 [auth.mfa.totp]
 enroll_enabled = true
