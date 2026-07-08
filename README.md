@@ -196,6 +196,7 @@ If/when you want to retry GitHub Pages: bump `nitro`, `vite`, and `@tanstack/rea
 
 ## Where to look next
 
+- **`DEVELOPER_GUIDE.md`** — the deep reference: complete live database schema, the auth/security model and its sharp edges, the deployment pipeline, every tool in the stack and why it's there, and a practical guide to adding your own features. Start here if you're building something new.
 - **`SUPABASE.md`** — every table, column, storage bucket, RLS policy, function, and trigger, so you can recreate the backend on a fresh Supabase project.
 - **`CUSTOMIZING.md`** — how to rename the app, change categories, tweak the design system, change how Backlog/Planned/Done are computed, and where uploads land in storage.
 - **`PORTABILITY.md`** — notes on moving to a non-Supabase backend.
