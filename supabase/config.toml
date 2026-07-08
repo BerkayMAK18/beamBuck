@@ -1,1 +1,35 @@
-project_id = "fclobhslnmxqnbfesbcx"
+project_id = "zysbriojsrnlxdgtkkbx"
+
+# NOTE: `supabase config push` diffs this file's FULL schema against
+# built-in CLI defaults, not just the sections you write — any field left
+# unset here gets pushed as whatever the CLI's scaffold default is, which
+# can silently overwrite live settings you never intended to touch. Every
+# field below except [auth.hook.before_user_created] is pinned to match
+# this project's actual pre-existing values (captured from a `config push`
+# diff on 2026-07-08) purely to prevent that — it is NOT a statement that
+# these are the "right" values, just the values already live. Change them
+# deliberately, not by leaving them unset.
+
+# Enforces the invite allowlist at signup (see SUPABASE.md and the
+# hook_enforce_signup_allowlist migration). Without this, anyone who calls
+# the Supabase Auth signup API directly bypasses the frontend's allowlist
+# pre-check entirely. This is the one deliberate change in this file.
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/hook_enforce_signup_allowlist"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = []
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[storage.vector]
+enabled = false

@@ -114,7 +114,7 @@ The path convention matters — the RLS policies below extract the first folder 
 All are defined in `SET search_path = public` for safety.
 
 ### `is_email_allowed(_email text) → boolean`
-`SECURITY INVOKER`, `STABLE`. Returns true if `allowed_emails` is empty OR `_email` is on the list (case-insensitive). Used by the `profiles` insert policy and by the frontend as a pre-check before sign-up. `EXECUTE` granted to `authenticated` + `service_role`; revoked from `anon`.
+`SECURITY DEFINER`, `STABLE`. Returns true if `allowed_emails` is empty OR `_email` is on the list (case-insensitive). Used by the `profiles` insert policy and by the frontend as a pre-signup pre-check via RPC — called as `anon`, before the user has a session. Must stay `SECURITY DEFINER`: it was briefly switched to `SECURITY INVOKER` (assuming only `authenticated` callers), which made it silently always return `true` for `anon` callers regardless of the allowlist's real contents, because `allowed_emails` has no `anon` SELECT policy and RLS made the table look permanently empty. `EXECUTE` granted to `anon`, `authenticated`, `service_role`.
 
 ### `has_role(_user_id uuid, _role app_role) → boolean`
 `SECURITY DEFINER`, `STABLE`. Reads `user_roles` on behalf of the caller. Used inside `allowed_emails` policies so admin checks don't trigger recursive RLS. `EXECUTE` granted to `authenticated` + `service_role`.
