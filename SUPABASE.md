@@ -141,6 +141,11 @@ Plain `plpgsql`. Fires `BEFORE UPDATE` on every table with an `updated_at` colum
 
 > The four `sync_*` functions have `EXECUTE` revoked from `anon` and `authenticated` — they are trigger-only.
 
+### `hook_enforce_signup_allowlist(event jsonb) → jsonb`
+`SECURITY DEFINER`. **This is the real enforcement of "invite-only."** Everything else — the `is_email_allowed` pre-check in `src/routes/auth.tsx`, the RLS `INSERT` policy on `profiles` — is either a UI nicety or dead code by the time it runs, because `handle_new_user()` creates a `profiles` row for *any* `auth.users` insert unconditionally. Anyone who calls Supabase's public signup endpoint directly (bypassing the frontend) gets a real account and, via the shared-read RLS policies, full access to `bucket_items`, `calendar_events`, and every photo in `bucket-photos`.
+
+This function must be wired up as a **"Before User Created" Auth Hook** — see §9 for the one-time dashboard step. `EXECUTE` is granted only to `supabase_auth_admin` (revoked from `anon`/`authenticated`), matching Supabase's Auth Hooks requirements.
+
 ---
 
 ## 5. Triggers
@@ -278,9 +283,21 @@ Storage policies live on `storage.objects`. Both buckets are private; SELECT is 
 Under Supabase **Authentication**:
 
 - **Providers → Email**: enabled. "Confirm email" is optional; the app works either way (during dev, auto-confirm is convenient).
-- **Policies → Leaked Password Protection (HIBP)**: **on** (recommended).
+- **Policies → Leaked Password Protection (HIBP)**: **on** (recommended, more important once the app is publicly reachable).
 - **URL Configuration → Site URL**: your app's URL (`http://localhost:5173` in dev). The frontend passes `emailRedirectTo: window.location.origin` at sign-up, so add every hostname you use to the allowed redirect list.
 - **No** social providers required. If you want Google/Apple/etc., add them here — the app doesn't currently render provider buttons.
+
+### ⚠️ Before you publish this app anywhere public (e.g. GitHub Pages)
+
+The invite allowlist (`allowed_emails` / `is_email_allowed`) is **only enforced by the frontend** unless you complete this step. A migration (`hook_enforce_signup_allowlist`) ships the function; you still have to wire it up — this cannot be done from a migration file, it's a dashboard-only action:
+
+1. Go to **Authentication → Hooks** in the Supabase dashboard.
+2. Under **Before User Created**, choose **Postgres Function** and select `public.hook_enforce_signup_allowlist`.
+3. Save. Test by trying to sign up with an email that isn't on the `allowed_emails` list (or, if the list is still empty, add both real emails *first* — remember `is_email_allowed` treats an empty list as "anyone can join," which is the bootstrap path for your very first signup).
+
+**Until you've done that**, anyone who finds your Supabase project URL can call the signup API directly and get a fully authenticated account with read/write access to your shared bucket list, calendar, and photos — the app's "Invite-only" messaging is cosmetic without the hook. If you want a zero-effort stopgap in the meantime, turn off **Authentication → Settings → Allow new users to sign up** entirely once both of you have accounts, and only flip it on briefly (with the allowlist already populated) when inviting someone new.
+
+Also recommended once the app is public: enable **CAPTCHA protection** (hCaptcha or Cloudflare Turnstile) under **Authentication → Attack Protection**, since there's currently no rate limiting on the sign-in/sign-up forms.
 
 ---
 
