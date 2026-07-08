@@ -1,0 +1,10 @@
+/* 
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: geolocation=(), camera=(), microphone=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://zysbriojsrnlxdgtkkbx.supabase.co; font-src 'self' data:; connect-src 'self' https://zysbriojsrnlxdgtkkbx.supabase.co wss://zysbriojsrnlxdgtkkbx.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+/assets/*
+  cache-control: public, max-age=31536000, immutable

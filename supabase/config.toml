@@ -24,13 +24,24 @@ uri = "pg-functions://postgres/public/hook_enforce_signup_allowlist"
 # Cloudflare Worker (production); localhost:5173 stays in the redirect
 # list for local dev testing. Update site_url again if you attach a
 # custom domain later.
+#
+# minimum_password_length / password_requirements: bumped from the
+# fresh-project defaults (6 chars, no character-class requirement) since
+# leaked-password checking (Pro-only) isn't enabled — this is the main
+# remaining defense against a weak/reused password. Doesn't affect
+# existing accounts, only future signups/password changes.
 [auth]
 site_url = "https://berkaymak18-beambuck.akdemir-berkay.workers.dev"
 additional_redirect_urls = ["http://localhost:5173", "https://berkaymak18-beambuck.akdemir-berkay.workers.dev"]
+minimum_password_length = 10
+password_requirements = "lower_upper_letters_digits"
 
+# No frontend UI exists for MFA enrollment, so leaving it enabled just
+# means an unused, unreviewed feature is reachable via direct API calls.
+# Disabled as cleanup, not because it was a live weakness.
 [auth.mfa.totp]
-enroll_enabled = true
-verify_enabled = true
+enroll_enabled = false
+verify_enabled = false
 
 [auth.email]
 enable_confirmations = true

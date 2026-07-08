@@ -166,12 +166,14 @@ The build target defaults to Cloudflare Workers/Pages via Nitro. To deploy to No
 
 GitHub Pages only serves static files (no server runtime). `.github/workflows/deploy-pages.yml` is set up to build with `NITRO_PRESET=github-pages` — Nitro's static-site preset — and deploy via `actions/deploy-pages`, but **this build currently fails** on this project's pinned versions (nitro 3 beta, vite 8 beta, `@tanstack/react-start` 1.168.27): the final "building nitro environment for production" step throws `rolldownOptions.input should not be an html file when building for SSR`, and the prerendered `index.html`/`404.html` come out as 0-byte files even on runs that don't crash. This reproduced with the default server-entry override, without it, and with TanStack Start's own `spa: { enabled: true }` mode — it's an upstream bug in this beta combination, not something fixable from this repo's config. The workflow is left in place (manual `workflow_dispatch` trigger only, so it doesn't fail silently on every push) for whenever a fixed Nitro/Vite/TanStack Start release ships — see the comment at the top of that file for exactly what was tried.
 
-**Until then, use Cloudflare Pages/Workers instead** — it's already this project's default, tested build target, requires no extra config beyond what's in `vite.config.ts` today, and Cloudflare has a free tier that comfortably fits a 2-person app:
+**Until then, use Cloudflare Pages/Workers instead** — it's already this project's default, tested build target, requires no extra config beyond what's in `vite.config.ts` today, and Cloudflare has a free tier that comfortably fits a 2-person app. Deployed and verified live this way already:
 
 ```bash
-bun run build              # default preset is cloudflare-module, already wired up
-npx nitro deploy --prebuilt  # or connect the repo directly in the Cloudflare dashboard
+npx wrangler login   # one-time, opens a browser
+scripts/deploy.sh    # builds, then deploys via wrangler
 ```
+
+`scripts/deploy.sh` wraps the build + deploy rather than just running `npx nitro deploy --prebuilt` directly, because it also patches `preview_urls: false` into the generated `wrangler.json` (Cloudflare otherwise auto-enables an extra public "Preview URL" hostname per deployment) — that file is regenerated fresh on every build, so this can't just be committed once.
 
 If/when you want to retry GitHub Pages: bump `nitro`, `vite`, and `@tanstack/react-start` in `package.json`, run `NITRO_PRESET=github-pages bun run build` locally, confirm `.output/public/index.html` is non-empty, then re-enable the `push` trigger in the workflow.
 
