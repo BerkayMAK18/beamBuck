@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarCropDialog } from "@/components/avatar-crop-dialog";
 import { toast } from "sonner";
 import { X, Upload } from "lucide-react";
 
@@ -20,20 +21,23 @@ function SettingsPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [invite, setInvite] = useState("");
   const [allowlist, setAllowlist] = useState<string[]>([]);
-  const [members, setMembers] = useState<{ email: string; display_name: string | null }[]>([]);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
 
   useEffect(() => { setDisplayName(profile?.display_name ?? ""); }, [profile]);
 
-  const uploadAvatar = async (file: File) => {
+  const uploadAvatar = async (blob: Blob) => {
     if (!user) return;
+    setPendingAvatarFile(null);
     setUploadingAvatar(true);
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/avatar-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    const path = `${user.id}/avatar-${Date.now()}.jpg`;
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, blob, {
+      upsert: true,
+      contentType: "image/jpeg",
+    });
     if (upErr) { setUploadingAvatar(false); toast.error(upErr.message); return; }
-    const { data: signed } = await supabase.storage.from("avatars").createSignedUrl(path, 60 * 60 * 24 * 365);
-    const url = signed?.signedUrl ?? null;
-    const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+    const { data: signed, error: signErr } = await supabase.storage.from("avatars").createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (signErr || !signed) { setUploadingAvatar(false); toast.error(signErr?.message ?? "Could not create image URL"); return; }
+    const { error } = await supabase.from("profiles").update({ avatar_url: signed.signedUrl }).eq("id", user.id);
     setUploadingAvatar(false);
     if (error) { toast.error(error.message); return; }
     await refreshProfile();
@@ -52,8 +56,6 @@ function SettingsPage() {
     // Try to read allowlist. Without a SELECT policy this returns empty — that's fine, we just show what we can.
     const { data: emails } = await supabase.from("allowed_emails").select("email").order("added_at");
     setAllowlist((emails ?? []).map((r) => r.email));
-    const { data: profs } = await supabase.from("profiles").select("email,display_name");
-    setMembers(profs ?? []);
   };
 
   useEffect(() => { void loadAllowlist(); }, []);
@@ -103,7 +105,12 @@ function SettingsPage() {
               <label className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-full bg-muted hover:bg-muted/70 cursor-pointer w-fit">
                 <Upload className="w-4 h-4" />
                 {uploadingAvatar ? "Uploading…" : profile?.avatar_url ? "Change photo" : "Upload photo"}
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadAvatar(f); }} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingAvatarFile(f); e.target.value = ""; }}
+                />
               </label>
               {profile?.avatar_url && (
                 <button onClick={() => void removeAvatar()} className="text-xs text-muted-foreground hover:text-destructive w-fit">Remove</button>
@@ -145,21 +152,14 @@ function SettingsPage() {
               </ul>
             </div>
           )}
-          {members.length > 0 && (
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Signed in</div>
-              <ul className="space-y-1">
-                {members.map((m) => (
-                  <li key={m.email} className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2 text-sm">
-                    <span>{m.display_name || m.email.split("@")[0]}</span>
-                    <span className="text-xs text-muted-foreground">{m.email}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      <AvatarCropDialog
+        file={pendingAvatarFile}
+        onOpenChange={(open) => { if (!open) setPendingAvatarFile(null); }}
+        onCropped={(blob) => void uploadAvatar(blob)}
+      />
     </div>
   );
 }

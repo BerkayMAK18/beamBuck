@@ -31,6 +31,12 @@ const SECURITY_HEADERS: Record<string, string> = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://zysbriojsrnlxdgtkkbx.supabase.co",
     "font-src 'self' data:",
+    // heic-to's CSP-safe build offloads WASM decoding to a Worker constructed
+    // from a blob: URL specifically to avoid needing 'unsafe-eval' in
+    // script-src — without this, that Worker creation is silently blocked
+    // (worker-src falls back to script-src, which has no blob: source),
+    // and every HEIC photo decode/upload fails with a generic error.
+    "worker-src 'self' blob:",
     "connect-src 'self' https://zysbriojsrnlxdgtkkbx.supabase.co wss://zysbriojsrnlxdgtkkbx.supabase.co",
     "frame-ancestors 'none'",
     "base-uri 'self'",

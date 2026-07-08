@@ -3,12 +3,12 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { CalendarHeart, ListChecks, Settings, LogOut, Images } from "lucide-react";
+import { CalendarHeart, ListChecks, Settings, LogOut, BookHeart } from "lucide-react";
 
 const NAV = [
   { to: "/calendar", label: "Calendar", icon: CalendarHeart },
   { to: "/bucket", label: "Bucket", icon: ListChecks },
-  { to: "/gallery", label: "Gallery", icon: Images },
+  { to: "/journal", label: "Journal", icon: BookHeart },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

@@ -106,27 +106,29 @@ function CalendarPage() {
                 {dayItems.map((it) => {
                   const creator = profiles[it.created_by];
                   return (
-                    <li key={it.id} className="py-3 flex items-start gap-3">
-                      <div className="shrink-0 w-14 text-center">
+                    <li key={it.id} className="py-3.5 flex items-start gap-3">
+                      <div className="shrink-0 w-14 text-center pt-0.5">
                         <div className="text-sm font-medium">
                           {it.target_time ? it.target_time.slice(0, 5) : "All day"}
                         </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{it.title}</div>
-                        <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          {it.category && <Badge variant="secondary" className="rounded-full text-[10px]">{it.category}</Badge>}
-                          {creator && (
-                            <span className="inline-flex items-center gap-1.5">
-                              <Avatar className="w-4 h-4">
-                                {creator.avatar_url && <AvatarImage src={creator.avatar_url} alt="" />}
-                                <AvatarFallback className="text-[8px]">{(creator.display_name || creator.email).slice(0, 2).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              {creator.display_name || creator.email.split("@")[0]}
-                            </span>
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-sm font-medium leading-snug">{it.title}</div>
+                          {it.category && (
+                            <Badge variant="secondary" className="rounded-full text-[10px] shrink-0">{it.category}</Badge>
                           )}
                         </div>
-                        {it.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{it.notes}</p>}
+                        {creator && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Avatar className="w-4 h-4 shrink-0">
+                              {creator.avatar_url && <AvatarImage src={creator.avatar_url} alt="" />}
+                              <AvatarFallback className="text-[8px]">{(creator.display_name || creator.email).slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <span className="truncate">{creator.display_name || creator.email.split("@")[0]}</span>
+                          </div>
+                        )}
+                        {it.notes && <p className="text-xs text-muted-foreground line-clamp-2">{it.notes}</p>}
                       </div>
                     </li>
                   );

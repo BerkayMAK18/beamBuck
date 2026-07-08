@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       allowed_emails: {
@@ -149,6 +174,90 @@ export type Database = {
           },
         ]
       }
+      journal_notes: {
+        Row: {
+          body: string
+          bucket_item_id: string
+          created_at: string
+          created_by: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          bucket_item_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          bucket_item_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_notes_bucket_item_id_fkey"
+            columns: ["bucket_item_id"]
+            isOneToOne: false
+            referencedRelation: "bucket_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journal_photos: {
+        Row: {
+          bucket_item_id: string
+          caption: string | null
+          created_at: string
+          created_by: string
+          id: string
+          url: string
+        }
+        Insert: {
+          bucket_item_id: string
+          caption?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          url: string
+        }
+        Update: {
+          bucket_item_id?: string
+          caption?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_photos_bucket_item_id_fkey"
+            columns: ["bucket_item_id"]
+            isOneToOne: false
+            referencedRelation: "bucket_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_photos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -209,6 +318,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      hook_enforce_signup_allowlist: { Args: { event: Json }; Returns: Json }
       is_email_allowed: { Args: { _email: string }; Returns: boolean }
     }
     Enums: {
@@ -339,6 +449,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "user"],

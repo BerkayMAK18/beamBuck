@@ -179,7 +179,7 @@ function BucketPage() {
                             {creator.avatar_url && <AvatarImage src={creator.avatar_url} alt="" />}
                             <AvatarFallback className="text-[8px]">{(creator.display_name || creator.email).slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
-                          added by {creator.display_name || creator.email.split("@")[0]}
+                          {creator.display_name || creator.email.split("@")[0]}
                         </Badge>
                       )}
                     </div>
