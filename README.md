@@ -162,17 +162,18 @@ bun run preview    # preview the built app locally
 
 The build target defaults to Cloudflare Workers/Pages via Nitro. To deploy to Node instead, set `NITRO_PRESET=node-server` (or another [Nitro preset](https://nitro.build/deploy)) as an env var when building, or hard-pin one via `nitro: { preset: "..." }` in `vite.config.ts`.
 
-### 8. Deploying to GitHub Pages
+### 8. Deploying to GitHub Pages — currently broken upstream, use Cloudflare Pages for now
 
-GitHub Pages only serves static files (no server runtime), so this repo ships `.github/workflows/deploy-pages.yml`, which builds with `NITRO_PRESET=github-pages` — Nitro's static-site preset — and deploys the result via `actions/deploy-pages`.
+GitHub Pages only serves static files (no server runtime). `.github/workflows/deploy-pages.yml` is set up to build with `NITRO_PRESET=github-pages` — Nitro's static-site preset — and deploy via `actions/deploy-pages`, but **this build currently fails** on this project's pinned versions (nitro 3 beta, vite 8 beta, `@tanstack/react-start` 1.168.27): the final "building nitro environment for production" step throws `rolldownOptions.input should not be an html file when building for SSR`, and the prerendered `index.html`/`404.html` come out as 0-byte files even on runs that don't crash. This reproduced with the default server-entry override, without it, and with TanStack Start's own `spa: { enabled: true }` mode — it's an upstream bug in this beta combination, not something fixable from this repo's config. The workflow is left in place (manual `workflow_dispatch` trigger only, so it doesn't fail silently on every push) for whenever a fixed Nitro/Vite/TanStack Start release ships — see the comment at the top of that file for exactly what was tried.
 
-To use it:
+**Until then, use Cloudflare Pages/Workers instead** — it's already this project's default, tested build target, requires no extra config beyond what's in `vite.config.ts` today, and Cloudflare has a free tier that comfortably fits a 2-person app:
 
-1. **Repo Settings → Pages → Build and deployment → Source: "GitHub Actions."**
-2. **Repo Settings → Secrets and variables → Actions**, add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` (the same anon/public values from your `.env` — never the service role key).
-3. Push to `main`, or run the workflow manually from the Actions tab.
+```bash
+bun run build              # default preset is cloudflare-module, already wired up
+npx nitro deploy --prebuilt  # or connect the repo directly in the Cloudflare dashboard
+```
 
-The workflow uses `actions/configure-pages` to compute the right base path automatically (project page vs. `<user>.github.io` root repo vs. custom domain), which `vite.config.ts` and `src/router.tsx` pick up via `PAGES_BASE_PATH` / `import.meta.env.BASE_URL` — you shouldn't need to hardcode a repo name anywhere.
+If/when you want to retry GitHub Pages: bump `nitro`, `vite`, and `@tanstack/react-start` in `package.json`, run `NITRO_PRESET=github-pages bun run build` locally, confirm `.output/public/index.html` is non-empty, then re-enable the `push` trigger in the workflow.
 
 > **Before you make this public, read the "⚠️ Before you publish this app anywhere public" section in `SUPABASE.md`.** GitHub Pages has no access control of its own — a public Pages site is reachable by anyone with the URL, and the invite allowlist only actually blocks signups once you've wired up the Auth Hook described there.
 

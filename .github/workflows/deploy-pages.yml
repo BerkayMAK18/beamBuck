@@ -1,8 +1,25 @@
+# KNOWN BROKEN as of 2026-07-08 — do not rely on this yet.
+#
+# `bun run build` with NITRO_PRESET=github-pages currently fails on this
+# project's pinned toolchain (nitro 3.0.260603-beta / 3.0.260610-beta, vite
+# 8.1.3, @tanstack/react-start 1.168.27): the final "building nitro
+# environment for production" step throws
+#   "rolldownOptions.input should not be an html file when building for SSR."
+# and the prerendered index.html/404.html it does manage to write are 0
+# bytes even on the runs that don't crash. This reproduces with both the
+# default `tanstackStart.server.entry` override AND without it, and with
+# TanStack Start's own `spa: { enabled: true }` mode — so it's an upstream
+# bug in how Nitro's static/prerender preset family interacts with
+# TanStack Start's SSR entry in this beta combination, not an app config
+# issue. The default Cloudflare Workers build (`bun run build` with no
+# NITRO_PRESET override) works fine — see README.md "Build for production".
+#
+# Trigger is workflow_dispatch-only until this is confirmed fixed (retest
+# after bumping nitro/vite/@tanstack/react-start), so it doesn't silently
+# fail on every push to main.
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
