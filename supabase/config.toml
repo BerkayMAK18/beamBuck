@@ -18,12 +18,14 @@ project_id = "zysbriojsrnlxdgtkkbx"
 enabled = true
 uri = "pg-functions://postgres/public/hook_enforce_signup_allowlist"
 
-# site_url / additional_redirect_urls: the app calls signUp/signIn with
-# emailRedirectTo: window.location.origin, and Supabase only honors
-# redirects that match site_url or this list. site_url is the deployed
-# Cloudflare Worker (production); localhost:5173 stays in the redirect
-# list for local dev testing. Update site_url again if you attach a
-# custom domain later.
+# site_url / additional_redirect_urls: the app calls signUp/signIn/
+# resetPasswordForEmail with emailRedirectTo built from window.location.origin
+# (plus /reset-password for the password-reset flow), and Supabase only
+# honors redirects matching site_url or this list. Wildcarded with /** so
+# every current and future path under each origin is covered without
+# needing a new entry per route. site_url is the deployed Cloudflare
+# Worker (production); localhost:5173 stays in the list for local dev.
+# Update site_url again if you attach a custom domain later.
 #
 # minimum_password_length / password_requirements: bumped from the
 # fresh-project defaults (6 chars, no character-class requirement) since
@@ -32,7 +34,12 @@ uri = "pg-functions://postgres/public/hook_enforce_signup_allowlist"
 # existing accounts, only future signups/password changes.
 [auth]
 site_url = "https://berkaymak18-beambuck.akdemir-berkay.workers.dev"
-additional_redirect_urls = ["http://localhost:5173", "https://berkaymak18-beambuck.akdemir-berkay.workers.dev"]
+additional_redirect_urls = [
+  "http://localhost:5173",
+  "http://localhost:5173/**",
+  "https://berkaymak18-beambuck.akdemir-berkay.workers.dev",
+  "https://berkaymak18-beambuck.akdemir-berkay.workers.dev/**",
+]
 minimum_password_length = 10
 password_requirements = "lower_upper_letters_digits"
 

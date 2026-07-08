@@ -21,6 +21,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   useEffect(() => {
     if (!loading && session) navigate({ to: "/calendar", replace: true });
@@ -38,7 +39,7 @@ function AuthPage() {
           toast.error("This email isn't on the invite list yet. Ask the other person to add it from Settings.");
           return;
         }
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -47,6 +48,14 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        // Supabase returns a normal-looking success response (no error) for an
+        // email that's already registered too, to avoid leaking which emails
+        // exist. An empty identities array is the tell that nothing actually
+        // happened — no account was created and no password was changed.
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          toast.error("An account with this email already exists. Try signing in, or use \"Forgot password?\" below.");
+          return;
+        }
         toast.success("Welcome in!");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -57,6 +66,26 @@ function AuthPage() {
       toast.error(msg);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Enter your email above first.");
+      return;
+    }
+    setResetBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("If that email has an account, a reset link is on its way.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      toast.error(msg);
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -111,6 +140,16 @@ function AuthPage() {
                     At least 10 characters, with uppercase, lowercase, and a number. Save it to your phone's password
                     manager — Face ID / fingerprint will fill it in from then on.
                   </p>
+                )}
+                {mode === "signin" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleForgotPassword()}
+                    disabled={resetBusy}
+                    className="text-xs text-muted-foreground hover:text-foreground mt-1"
+                  >
+                    {resetBusy ? "Sending…" : "Forgot password?"}
+                  </button>
                 )}
               </div>
               <Button type="submit" disabled={busy} className="w-full rounded-full">
