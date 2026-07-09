@@ -11,9 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { BucketItem } from "@/components/bucket-item-dialog";
-import { decodeImageBlob, bitmapToJpegBlob } from "@/lib/image";
+import { decodeImageBlob, bitmapToJpegBlob, downloadImage } from "@/lib/image";
 import {
-  Upload, BookHeart, X, ChevronLeft, ChevronRight, Calendar as CalIcon, ArrowUpDown, ImageOff, Send, Pencil, Loader2, Info,
+  Upload, BookHeart, X, ChevronLeft, ChevronRight, Calendar as CalIcon, ArrowUpDown, ImageOff, Send, Pencil, Loader2, Info, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -110,6 +110,15 @@ function JournalPage() {
     const { error } = await supabase.from("journal_photos").update({ caption: caption || null }).eq("id", photo.id);
     if (error) { toast.error(error.message); return; }
     setPhotos((cur) => cur.map((p) => (p.id === photo.id ? { ...p, caption: caption || null } : p)));
+  };
+
+  const savePhoto = async (item: BucketItem, photo: Photo, index: number) => {
+    const slug = item.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "journal-photo";
+    try {
+      await downloadImage(photo.url, `${slug}-${index + 1}.jpg`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save this photo");
+    }
   };
 
   const removePhoto = async (photo: Photo) => {
@@ -310,6 +319,7 @@ function JournalPage() {
                         onCaptionBlur={(v) => void saveCaption(photo, v)}
                         onRemove={() => void removePhoto(photo)}
                         onFix={() => void repairPhoto(photo)}
+                        onDownload={() => void savePhoto(item, photo, idx)}
                       />
                     ))}
                   </div>
@@ -401,6 +411,14 @@ function JournalPage() {
           {lightbox && activeItem && activePhoto && (
             <div className="relative">
               <img src={activePhoto.url} alt={activePhoto.caption ?? ""} className="w-full max-h-[80vh] object-contain rounded-lg" />
+              <button
+                type="button"
+                onClick={() => void savePhoto(activeItem, activePhoto, lightbox.index)}
+                className="absolute right-2 top-2 bg-background/80 backdrop-blur rounded-full p-2"
+                aria-label="Save photo to device"
+              >
+                <Download className="w-5 h-5" />
+              </button>
               {activePhotos.length > 1 && (
                 <>
                   <button
@@ -443,7 +461,7 @@ function JournalPage() {
 }
 
 function PhotoTile({
-  photo, issue, onOpen, onCaptionBlur, onRemove, onFix,
+  photo, issue, onOpen, onCaptionBlur, onRemove, onFix, onDownload,
 }: {
   photo: Photo;
   issue?: PhotoIssue;
@@ -451,6 +469,7 @@ function PhotoTile({
   onCaptionBlur: (value: string) => void;
   onRemove: () => void;
   onFix: () => void;
+  onDownload: () => void;
 }) {
   const [caption, setCaption] = useState(photo.caption ?? "");
 
@@ -480,6 +499,16 @@ function PhotoTile({
               onError={onFix}
               className="w-full h-full object-cover hover:scale-105 transition"
             />
+          </button>
+        )}
+        {!issue && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDownload(); }}
+            className="absolute top-1 left-1 bg-background/80 backdrop-blur rounded-full p-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition"
+            aria-label="Save photo to device"
+          >
+            <Download className="w-3 h-3" />
           </button>
         )}
         <button
