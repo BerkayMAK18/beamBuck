@@ -166,7 +166,11 @@ The build target defaults to Cloudflare Workers/Pages via Nitro. To deploy to No
 
 GitHub Pages only serves static files (no server runtime). `.github/workflows/deploy-pages.yml` is set up to build with `NITRO_PRESET=github-pages` — Nitro's static-site preset — and deploy via `actions/deploy-pages`, but **this build currently fails** on this project's pinned versions (nitro 3 beta, vite 8 beta, `@tanstack/react-start` 1.168.27): the final "building nitro environment for production" step throws `rolldownOptions.input should not be an html file when building for SSR`, and the prerendered `index.html`/`404.html` come out as 0-byte files even on runs that don't crash. This reproduced with the default server-entry override, without it, and with TanStack Start's own `spa: { enabled: true }` mode — it's an upstream bug in this beta combination, not something fixable from this repo's config. The workflow is left in place (manual `workflow_dispatch` trigger only, so it doesn't fail silently on every push) for whenever a fixed Nitro/Vite/TanStack Start release ships — see the comment at the top of that file for exactly what was tried.
 
-**Until then, use Cloudflare Pages/Workers instead** — it's already this project's default, tested build target, requires no extra config beyond what's in `vite.config.ts` today, and Cloudflare has a free tier that comfortably fits a 2-person app. Deployed and verified live this way already:
+**Until then, use Cloudflare Pages/Workers instead** — it's already this project's default, tested build target, requires no extra config beyond what's in `vite.config.ts` today, and Cloudflare has a free tier that comfortably fits a 2-person app.
+
+**Automatic:** `.github/workflows/deploy-cloudflare.yml` builds and deploys on every push to `main`. Requires `CLOUDFLARE_API_TOKEN` (and `VITE_SUPABASE_*`) set as GitHub Actions repo secrets — see the comment block at the top of that file for exactly which secrets and why. Server-only Supabase vars (`SUPABASE_SERVICE_ROLE_KEY` etc.) are unrelated to this workflow; they must already be set as Cloudflare Worker variables/secrets since the Worker reads them at runtime, not at build time.
+
+**Manual:** for deploying from a local checkout without going through CI:
 
 ```bash
 npx wrangler login   # one-time, opens a browser
