@@ -19,30 +19,27 @@ export async function decodeImageBlob(blob: Blob): Promise<ImageBitmap> {
   }
 }
 
-// Saves a photo to the device. Mobile browsers ignore the `download`
-// attribute on cross-origin URLs (these are signed Supabase Storage links),
-// so a plain <a download> silently opens the image instead of saving it.
-// Fetching the bytes first and handing them to the native share sheet (which
-// on iOS Safari surfaces a "Save Image" action that writes straight to the
-// Camera Roll) is what actually gets a copy onto the device; the object-URL
-// anchor is the fallback where Web Share isn't available (desktop browsers,
-// older Android WebViews).
+// Saves a photo to the device as a direct download, not a share action.
+// Mobile browsers ignore the `download` attribute on cross-origin URLs
+// (these are signed Supabase Storage links), so a plain <a download>
+// silently opens the image instead of saving it -- fetching the bytes first
+// and handing them to an object-URL anchor is what actually triggers a save.
+//
+// Deliberately NOT using the Web Share API here: `navigator.share({files})`
+// opens the full share sheet (AirDrop/Messages/contacts) with "Save Image"
+// buried among the send-to targets, which reads as "share this" rather than
+// "download this" -- confusing for a save-a-photo action. This path saves
+// straight to the Downloads folder on Android/desktop with no picker at
+// all. iOS Safari is the one gap: it saves into the Files app, not directly
+// into Photos/Camera Roll -- there's no code-only way around that on iOS,
+// short of the share sheet this function avoids. The one-tap alternative
+// that *does* land straight in Photos on iOS, for free, is long-pressing
+// the full-size <img> in the lightbox and choosing "Save to Photos" --
+// that's a native Safari gesture, not something this function can trigger.
 export async function downloadImage(url: string, filename: string): Promise<void> {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Could not download this photo");
   const blob = await res.blob();
-
-  if (navigator.canShare && navigator.share) {
-    const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
-    if (navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file] });
-        return;
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") return; // user cancelled the share sheet
-      }
-    }
-  }
 
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");

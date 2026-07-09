@@ -414,7 +414,7 @@ function JournalPage() {
               <button
                 type="button"
                 onClick={() => void savePhoto(activeItem, activePhoto, lightbox.index)}
-                className="absolute right-2 top-2 bg-background/80 backdrop-blur rounded-full p-2"
+                className="absolute left-2 top-2 bg-background/80 backdrop-blur rounded-full p-2"
                 aria-label="Save photo to device"
               >
                 <Download className="w-5 h-5" />
