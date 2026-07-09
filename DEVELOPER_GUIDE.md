@@ -27,13 +27,15 @@ Browser ──HTTPS──▶ Cloudflare Worker (SSR shell + security headers)
                                               └─ Realtime (WebSocket, RLS-enforced)
 ```
 
-This matters for how you build features: **there is no server-side request handler to add business logic to.** If you want to enforce a rule ("only the creator can delete X", "email must be on a list before Y"), it has to live in a Postgres RLS policy, a trigger, or a `SECURITY DEFINER` function — not in a TanStack Start server function, because the app doesn't route data operations through one. (There *is* scaffolding for server functions — see §7 — but nothing currently uses it.)
+This matters for how you build features: **there is no server-side request handler to add business logic to.** If you want to enforce a rule ("only the creator can delete X", "email must be on a list before Y"), it has to live in a Postgres RLS policy, a trigger, or a `SECURITY DEFINER` function — not in a TanStack Start server function, because the app doesn't route data operations through one. (There *is* scaffolding for server functions — see §3.6 — but nothing currently uses it.)
+
+For a file-by-file walkthrough of every route, component, and lib file — what each one does, and the specific gotcha to know before editing it — see **§9. Codebase tour**.
 
 ---
 
 ## 2. Database schema (live, complete)
 
-Source of truth: `supabase/migrations/*.sql`, applied in filename order. As of this doc there are 16 migrations. What follows is the *resulting* schema, not a chronological history — read `SUPABASE.md` if you want the "what changed when and why" narrative, or the migration files themselves for exact SQL.
+Source of truth: `supabase/migrations/*.sql`, applied in filename order. As of this doc there are 19 migrations. What follows is the *resulting* schema, not a chronological history — read `SUPABASE.md` if you want the "what changed when and why" narrative, or the migration files themselves for exact SQL.
 
 ### 2.1 Enums
 
@@ -86,7 +88,7 @@ There is no `'backlog'` database value — see §2.2.
 | `status` | `bucket_status` not null | Default `'planned'`. |
 | `completed_by` | `uuid` | FK → `profiles(id) ON DELETE SET NULL`. |
 | `completed_at` | `timestamptz` | |
-| `image_urls` | `text[]` not null | Signed URLs into `bucket-photos`, default `'{}'`. |
+| `image_urls` | `text[]` not null | **Legacy, no longer written to** — superseded by `journal_photos` below. Signed URLs into `bucket-photos`, default `'{}'`. |
 | `links` | `text[]` not null | Reserved, unused by the UI today. |
 | `created_by` | `uuid` not null | FK → `profiles(id) ON DELETE CASCADE`. Row owner. |
 | `created_at`, `updated_at` | `timestamptz` | |
@@ -107,6 +109,25 @@ There is no `'backlog'` database value — see §2.2.
 | `created_at`, `updated_at` | `timestamptz` | |
 
 The current Calendar UI (`src/routes/_authenticated/calendar.tsx`) actually queries **`bucket_items` directly**, not this table. `calendar_events` exists and is kept correctly in sync (see §2.4) for future use — e.g. an ICS export — but nothing reads it today. If you build a feature against it, know that it's currently write-only from the app's perspective.
+
+**`public.journal_photos`** / **`public.journal_notes`** — added 2026-07-09, back the Journal tab (`src/routes/_authenticated/journal.tsx`). Unlike every other table above, these are **shared-write**: any signed-in user can insert/update/delete any row, not just their own — see §2.5. `journal_photos` one-time-backfilled every existing `bucket_items.image_urls` entry on creation.
+
+| `journal_photos` column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `bucket_item_id` | `uuid` not null | FK → `bucket_items(id) ON DELETE CASCADE`. |
+| `url` | `text` not null | Signed URL into `bucket-photos` (same bucket `image_urls` used). |
+| `caption` | `text` | Nullable, editable. |
+| `created_by` | `uuid` not null | FK → `profiles(id) ON DELETE CASCADE` — who uploaded it, not necessarily the item's owner. |
+| `created_at` | `timestamptz` | |
+
+| `journal_notes` column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `bucket_item_id` | `uuid` not null | FK → `bucket_items(id) ON DELETE CASCADE`. |
+| `body` | `text` not null | |
+| `created_by` | `uuid` not null | FK → `profiles(id) ON DELETE CASCADE`. |
+| `created_at`, `updated_at` | `timestamptz` | `updated_at` added by a follow-up migration, maintained by `set_updated_at()` — the UI shows "· edited" when it differs from `created_at`. |
 
 ### 2.3 Functions
 
@@ -137,6 +158,7 @@ bucket_items       AFTER DELETE              → sync_bucket_delete_to_calendar(
 calendar_events    BEFORE UPDATE             → set_updated_at()
 calendar_events    AFTER INSERT OR UPDATE    → sync_calendar_to_bucket()
 calendar_events    AFTER DELETE              → sync_calendar_delete_to_bucket()
+journal_notes      BEFORE UPDATE             → set_updated_at()
 ```
 
 ### 2.5 Row Level Security (live policies, per table)
@@ -150,6 +172,10 @@ RLS is enabled on every table. Remember: `authenticated` in this app means **any
 | `bucket_items` | any authenticated | `auth.uid() = created_by` | **owner only** | owner only |
 | `calendar_events` | any authenticated | `auth.uid() = created_by` | owner only | owner only |
 | `user_roles` | `auth.uid() = user_id` (own rows only) | — (denied) | — (denied) | — (denied) |
+| `journal_photos` | any authenticated | `auth.uid() = created_by` | **any authenticated** | **any authenticated** |
+| `journal_notes` | any authenticated | `auth.uid() = created_by` | owner only | owner only |
+
+**`journal_photos` is shared-write on UPDATE/DELETE, deliberately different from every table above.** A memory book only makes sense if both people can fix a caption or delete a bad photo, even one their partner uploaded — so this is `USING (true)`, not owner-only. `journal_notes` stays owner-only on UPDATE/DELETE since a note is attributed to a specific person by name; editing someone else's words wouldn't make sense the way removing a blurry photo does.
 
 **Owner-only UPDATE on `bucket_items` means only the creator of an item can mark it done.** If you want either person to be able to check off anything, that's a deliberate policy change: `USING (true)` on the UPDATE policy. Not a bug — it's the current tradeoff between "shared workspace" and "don't let the other person accidentally edit your stuff."
 
@@ -161,14 +187,14 @@ Two private buckets (`public: false`), created via the Storage API (not by a mig
 
 | Bucket | Path convention | SELECT | INSERT/UPDATE/DELETE |
 |---|---|---|---|
-| `bucket-photos` | `<user_id>/<timestamp>-<filename>` | any authenticated (shared gallery) | only within your own `<user_id>/` folder |
+| `bucket-photos` | `<user_id>/<timestamp>-<filename>` | any authenticated (shared Journal) | only within your own `<user_id>/` folder |
 | `avatars` | `<user_id>/avatar-<timestamp>.<ext>` | any authenticated | only within your own `<user_id>/` folder |
 
 The `<user_id>/` prefix isn't optional — the RLS policy on `storage.objects` extracts `(storage.foldername(name))[1]` and compares it to `auth.uid()::text`. Uploads outside your own folder are rejected. Signed URLs are generated with a 365-day expiry at upload time and stored permanently in the DB — they don't auto-refresh, so a URL 404s once its signature expires (see `CUSTOMIZING.md` §4 if you want to change this).
 
 ### 2.7 Grants
 
-Supabase's PostgREST does **not** grant default table privileges — every table needs an explicit `GRANT`, or requests 401 even when RLS would otherwise allow them. Current grants: `authenticated` has `SELECT, INSERT, UPDATE, DELETE` on `profiles`, `allowed_emails`, `bucket_items`, `calendar_events`, and `SELECT` only on `user_roles`. `service_role` has `ALL` on everything. `anon` has no table grants at all — every table read requires a signed-in session (the *functions* `is_email_allowed` and the auth hook are the only things `anon`/the auth service can call).
+Supabase's PostgREST does **not** grant default table privileges — every table needs an explicit `GRANT`, or requests 401/403 even when RLS would otherwise allow them (a missing `GRANT` and an RLS denial fail differently: RLS returns 200 with zero rows for INSERT/UPDATE/DELETE it blocks, a missing `GRANT` returns a hard 403 `permission denied` — see the §8 bullet about migration `20260709120000` for a real instance of this being mixed up). Current grants: `authenticated` has `SELECT, INSERT, UPDATE, DELETE` on `profiles`, `allowed_emails`, `bucket_items`, `calendar_events`, `journal_photos`, `journal_notes`, and `SELECT` only on `user_roles`. `service_role` has `ALL` on everything. `anon` has no table grants at all — every table read requires a signed-in session (the *functions* `is_email_allowed` and the auth hook are the only things `anon`/the auth service can call).
 
 ---
 
@@ -257,6 +283,8 @@ const { data: signed } = await supabase.storage
 ```
 
 Skipping the `<user_id>/` prefix means the upload is rejected by RLS, not silently misfiled — so this fails loudly, at least.
+
+For actual photo uploads (as opposed to this minimal example), don't upload the raw `File` — decode it first with `decodeImageBlob` and re-encode with `bitmapToJpegBlob` (both in `src/lib/image.ts`, used by `journal.tsx`'s `uploadPhotos`). That's what makes HEIC photos from iPhones work at all (most browsers besides Safari can't decode HEIC natively) and keeps upload sizes down via downscaling.
 
 ### 3.6 If you need real server-side logic
 
@@ -415,3 +443,67 @@ All of the above live in a local, gitignored `.env` (template: `.env.example`) f
 - **CAPTCHA is not enabled** on signup/signin — `[auth.captcha]` exists in the config schema but turning it on requires both a third-party provider account (hCaptcha/Turnstile) *and* frontend widget code that doesn't exist yet. Enabling the server-side setting without the frontend change would lock everyone out (every auth request would be rejected for a missing captcha token) — don't do one without the other.
 - **`calendar_events` is fully maintained but unread** by the current UI (§2.2) — a trap if you assume "the calendar events table" is what powers the Calendar page.
 - **The favicon is a placeholder** (`public/favicon.svg`, an emoji) — the original `favicon.ico` is still in the repo, unreferenced.
+- **`bucket.tsx`'s "mark done" checkbox can silently no-op.** `bucket_items` UPDATE is owner-only RLS (`auth.uid() = created_by`, §2.5) — but `toggleDone` (`src/routes/_authenticated/bucket.tsx`) optimistically flips the checkbox in local state *before* the Supabase call resolves, and Supabase's `.update()` under RLS returns **success with zero rows affected**, not an error, when the policy blocks the write. So toggling an item you didn't create looks like it worked in your own tab — until the next realtime refresh (or reload) reverts it, with no error message explaining why. Same applies to editing/deleting someone else's item via `BucketItemDialog`. If you loosen this to `USING (true)` so either partner can mark anything done, this whole failure mode disappears.
+- **Two pieces of server-function scaffolding are wired up but have zero callers.** `src/integrations/supabase/auth-middleware.ts` (`requireSupabaseAuth`) and `src/integrations/supabase/client.server.ts` (`supabaseAdmin`) exist and are individually correct, but no server function in the app actually uses either one — don't assume they're "the pattern already in use somewhere, go copy it." §3.6 has the intended usage.
+- **`src/components/event-dialog.tsx` (`EventDialog`) is dead code.** It's a fully-built create/edit/delete form for `calendar_events`, but nothing imports it — `calendar.tsx` has no click-to-add-event UI wired up at all. If a feature request is "let people add events directly from the Calendar tab," this component is 90% of the work, but it needs to actually be mounted and hooked to a trigger (e.g. clicking a day).
+- **Newly-invited users never become admin, so invite management quietly breaks for them.** The migration that introduces `user_roles` seeds every profile that exists *at migration time* as `admin` (§2.2/§4.2) — a one-time backfill, not an ongoing rule. Nothing in the app ever grants `admin` to a user created afterward. In practice this means: the two original users can manage the `allowed_emails` list forever, but a third person invited later sees the same "Add/remove invite" UI in Settings, gets no error until they click, and then gets an RLS-denial toast — because `has_role(auth.uid(), 'admin')` is false for them. There's no self-service path to fix this; it's a manual `INSERT INTO user_roles` from a service-role context.
+- **Avatar uploads never delete the previous blob.** `removeAvatar`/re-upload in `src/routes/_authenticated/settings.tsx` only ever nulls or overwrites `profiles.avatar_url`; every upload writes a new timestamped path in the `avatars` bucket rather than replacing the old one, so old avatar images accumulate in Storage indefinitely. Harmless at 2-person scale, worth knowing if you're ever auditing Storage usage/cost.
+- **A migration's RLS policy doesn't work without a matching `GRANT`, and Postgres's error for that is easy to misread as an RLS problem.** Migration `20260709120000` added `UPDATE` RLS policies on `journal_photos`/`journal_notes` to fix the caption/note editors, but forgot the table-level `GRANT UPDATE ON ... TO authenticated` — so both edits kept failing with `permission denied for table ... (42501)`, a *different* error than an RLS denial (which returns 200 with zero rows changed, not a 403). Fixed in `20260709130000_grant_journal_update.sql`. The lesson: RLS policies only ever narrow what an already-granted privilege allows — if the privilege itself isn't granted, the policy is unreachable, and Postgres will tell you exactly which `GRANT` is missing if you read the error's `hint` field.
+
+---
+
+## 9. Codebase tour
+
+Section §2 covers the database; this covers every route, component, and lib file — what it does, and specifically what to know before you edit it. Skipped: `src/components/ui/*` (unmodified shadcn primitives), `src/routeTree.gen.ts` (auto-generated, never hand-edited), `src/integrations/supabase/types.ts` (auto-generated DB types).
+
+**Cross-cutting patterns, worth knowing before the file-by-file list:**
+- **Realtime is copy-pasted per page, not shared.** `bucket.tsx` and `calendar.tsx` (and `journal.tsx`) each independently open their own `supabase.channel(name).on("postgres_changes", {event: "*", schema: "public", table: "..."}, () => void load())`, and each just does a full refetch on *any* change to the table — no incremental/optimistic merging, no shared hook. Copy this exact pattern if a new page needs live sync; there's no abstraction to import instead.
+- **Most business rules live in Postgres, not React.** `handle_new_user` (profile-on-signup), `sync_bucket_to_calendar`/`sync_calendar_to_bucket` (bidirectional mirroring, recursion-guarded via `pg_trigger_depth()`), and the delete-cascade triggers all run without any application code involved. If you're trying to find "where does X get set" and it's not in the route file, check `supabase/migrations/` next — see §2.4.
+- **`AuthProvider`'s listener-then-hydrate ordering is load-bearing.** `src/lib/auth-context.tsx` registers `supabase.auth.onAuthStateChange` *before* calling `getSession()` (documented inline, and worth repeating here because it's the one place in this codebase where reordering two lines "for clarity" reintroduces a real race condition per Supabase's own docs) — an auth event fired in the gap between `getSession()` resolving and the listener attaching would otherwise be missed.
+
+### `src/routes/` — pages
+
+- **`index.tsx`** — `/`. Redirect-only stub: `beforeLoad` calls `supabase.auth.getSession()` (a local/cached check, no network round-trip) and sends you to `/calendar` or `/auth`. `ssr: false`, so there's a brief blank flash before it resolves client-side.
+- **`auth.tsx`** — `/`. Combined sign-in/sign-up + "forgot password" trigger. Two things to know: (1) Supabase deliberately returns a *success-shaped* response for "email already registered" to avoid leaking which emails exist — the actual tell is `data.user.identities.length === 0`, not `error`; a well-meaning simplification to "just check `error`" breaks the duplicate-account message. (2) The `is_email_allowed` RPC call before sign-up is a **UI nicety only** — real enforcement is the `hook_enforce_signup_allowlist` Auth Hook (§4.1); removing the RPC call changes nothing about actual security.
+- **`reset-password.tsx`** — landing page for the emailed reset link. Doesn't gate on `!session` the way you'd expect (no redirect to `/auth`) — it renders an inline "link expired" state instead, because arriving here *is* the auth flow (Supabase's client silently exchanges the link's token for a session on load). Not under `_authenticated/`, so it has no `beforeLoad` gate of its own.
+- **`__root.tsx`** — app shell: `<html>`/`<head>`, global CSS/font imports, `QueryClientProvider` + `AuthProvider`, and the route-level `ErrorComponent` (404/error boundary). Two separate render slots matter here: `shellComponent` (raw HTML document, used for SSR) vs. `component` (renders inside that shell, where providers live) — a new global provider goes in the latter, not the former. `Toaster` is mounted once here (not per-page), which is why `toast.success(...)` works from any route with zero setup.
+- **`_authenticated/route.tsx`** — the actual auth gate for every tab. `beforeLoad` calls `supabase.auth.getUser()` — unlike `index.tsx`'s local-only `getSession()`, this makes a real network call to validate the JWT server-side, and redirects to `/auth` if it fails. Wraps children in `<AppShell>`. Any new page dropped into `_authenticated/` inherits this gate automatically — no per-page auth code needed, but forgetting to put a page under this folder means no gate at all.
+- **`_authenticated/bucket.tsx`** — bucket-list CRUD. Loads `bucket_items` + `profiles` together, filters/derives "backlog vs. planned vs. done" entirely client-side from the same `items` array (see §3, "Backlog" isn't a DB value). **The one gotcha that matters most in this file:** see the `toggleDone` RLS bullet in §8 — marking someone else's item done looks like it works, then silently reverts. Deleting an item here cascades to `journal_photos`/`journal_notes` and the linked `calendar_events` row via DB triggers — the confirmation dialog text only mentions the calendar, not the journal photos/notes that also disappear.
+- **`_authenticated/calendar.tsx`** — read-only agenda view. Queries `bucket_items` directly (`status = 'planned' AND target_date IS NOT NULL`), **not** `calendar_events` — despite the DB keeping that table in perfect sync via triggers, this page never reads it (§2.2). The day-grouping logic (`grouped`) assumes the query's own `.order()` already sorted items and only checks adjacency against the *last* group pushed; if you ever fetch this list unsorted, same-day items stop merging into one header instead of erroring.
+- **`_authenticated/journal.tsx`** — the Journal tab: completed items as cards, with photo uploads (`journal_photos`) and a comment thread (`journal_notes`). Both tables are shared-write (any signed-in user can add/edit/delete any entry — see §2.2/§2.7), unlike `bucket_items`'s owner-only model, because a shared memory book only makes sense if both people can contribute to any entry. Photo upload goes through `decodeImageBlob`/`bitmapToJpegBlob` (`src/lib/image.ts`) for HEIC support and downsizing before hitting Storage. The "save to device" download button uses `downloadImage` from the same file — deliberately *not* the Web Share API, see that file's entry below for why.
+- **`_authenticated/settings.tsx`** — profile (display name, avatar) + invite-allowlist management. Avatar upload doesn't happen directly on file-select — picking a file opens `AvatarCropDialog`, and the actual Storage upload only happens from that dialog's "Save photo" callback. Invite add/remove buttons render for every signed-in user regardless of role, but the underlying RLS is admin-only — see the "newly-invited users never become admin" bullet in §8 before assuming this UI works for everyone who can see it.
+
+### `src/components/` — dialogs & shell
+
+- **`app-shell.tsx`** — the persistent header/nav + mobile bottom tab bar wrapping every authenticated page. Sign-out (`handleSignOut`) explicitly navigates to `/auth` after `signOut()` — signing out alone doesn't redirect, so a second sign-out button elsewhere would need to repeat that `navigate` call.
+- **`bucket-item-dialog.tsx`** — create/edit form for a `bucket_items` row; also the source of the exported `BucketItem` type that `calendar.tsx` and `journal.tsx` import (type-only) to agree on shape. Writes go straight from the browser to Supabase (`.insert`/`.update`) — RLS is the only authorization layer, there's no server function in between.
+- **`event-dialog.tsx`** — create/edit/delete form for a `calendar_events` row. **Currently unused — see the dead-code bullet in §8** before assuming it's wired into the Calendar page.
+- **`avatar-crop-dialog.tsx`** — circular pan/zoom/crop UI for avatar uploads, exporting a fixed 512px JPEG. Renders to `<canvas>` (not CSS transforms on an `<img>`) specifically for correct EXIF orientation and to avoid touch/pointer bugs on Android. If you change the preview box size (`BOX`) or export size (`OUTPUT`) independently, check `handleSave`'s rescale math — it maps the interactive preview transform onto the export canvas using their ratio.
+
+### `src/lib/` — utilities
+
+- **`auth-context.tsx`** — `AuthProvider`/`useAuth()`, the single source of truth for "who's logged in" client-side. See the listener-ordering note above; also defers the profile fetch inside the `onAuthStateChange` callback via `setTimeout(..., 0)` specifically to avoid deadlocking Supabase's internal auth lock (calling another Supabase method synchronously inside that callback is documented by Supabase as unsafe).
+- **`image.ts`** — `decodeImageBlob` (HEIC-aware decoding, dynamically imports a ~3MB WASM fallback only when the browser's native decoder fails), `bitmapToJpegBlob` (downscale + re-encode), and `downloadImage` (saves a photo to the device). `downloadImage` deliberately does **not** use `navigator.share` — that opens the OS share sheet (send-to-apps/contacts), which reads as "share this" rather than "download this" and was explicitly rejected after user feedback; it fetches the bytes and clicks a blob-URL `<a download>` instead. iOS Safari still saves to the Files app rather than Camera Roll this way — there's no code-only fix for that on iOS, only the user's own long-press → "Save to Photos" gesture on the rendered `<img>`.
+- **`error-capture.ts`** — a tiny global (not per-request) listener that records the last uncaught error/rejection server-side, with a 5-second TTL, so `server.ts` can recover the *real* error after h3 (Nitro's HTTP layer) has already collapsed a thrown error into an opaque generic 500 JSON body. Must be imported for its side effects before any request handling starts (`server.ts` line 1) — it has no exported "capture" function, only `consumeLastCapturedError()`.
+- **`error-page.ts`** — `renderErrorPage()`: a hand-written, dependency-free HTML string (inline `<style>`, inline `onclick` reload button, no external JS) for the generic error page — deliberately not a React component, since it has to render correctly even when the reason you're seeing it is that the JS bundle itself failed.
+- **`lovable-error-reporting.ts`** — `reportLovableError()`, a no-op-safe optional-chaining bridge to `window.__lovableEvents?.captureException`, a hook injected by the Lovable hosting platform that won't exist at all outside it (e.g. on GitHub Pages/Cloudflare directly) — safe to call unconditionally from anywhere client-side.
+- **`utils.ts`** — just the standard shadcn `cn()` class-merge helper (`clsx` + `tailwind-merge`). Used by nearly every file under `components/ui/`; treat it as load-bearing infrastructure, not app code.
+
+### `src/hooks/use-mobile.tsx`
+
+`useIsMobile()`, a `matchMedia`-based 768px breakpoint hook. Only consumer today is the shadcn `Sidebar` primitive — every actual page in this app does responsive layout with plain Tailwind breakpoints (`sm:flex`/`sm:hidden`) instead, so that's the pattern to follow for new UI, not this hook.
+
+### `src/integrations/supabase/` — generated clients
+
+Everything here is Lovable-Cloud-generated (`client.ts`, `client.server.ts`, `types.ts` carry a "do not edit directly" header) except `auth-middleware.ts`/`auth-attacher.ts`, which are hand-written.
+
+- **`client.ts`** — the browser client, exported as `supabase`. Not a plain instance — it's a `Proxy` that constructs the real client lazily on first property access, so a missing env var throws only when `supabase` is actually used, not at module-import time (which matters given how many different build contexts — client, SSR — this module gets pulled into).
+- **`client.server.ts`** — `supabaseAdmin`, a service-role client that bypasses RLS entirely. **Currently unused anywhere in the app** (§8). If you do wire it up: it must only ever be imported with a dynamic `await import(...)` *inside* a server handler — a top-level `import` in a route file or `*.functions.ts` file risks the service-role key ending up in a bundle that ships to the browser, since those file types are client-bundled by default.
+- **`auth-middleware.ts`** — `requireSupabaseAuth`, a per-request server-function middleware that validates the caller's JWT and builds a Supabase client scoped to that specific user (so RLS sees the real `auth.uid()`, not anon/service-role). **Also currently unused** (§8) — it's the intended attachment point for a future authenticated server function, not something already active.
+- **`auth-attacher.ts`** — the client-side counterpart: attaches the current session's access token as an `Authorization: Bearer` header on every outgoing server-function call. Registered globally in `src/start.ts`; if that registration is ever removed, every server-function call silently stops sending its auth header, and the failure only surfaces later, inside whatever middleware expects that header — not at the call site.
+
+### Top-level `src/` files
+
+- **`router.tsx`** — `getRouter()`, called once per client boot and once per SSR request; creates a fresh `QueryClient` each time (not a shared singleton). `defaultPreloadStaleTime: 0` hands all "is this data fresh" logic to React Query instead of TanStack Router's own preload cache.
+- **`start.ts`** — global TanStack Start config: registers `attachSupabaseAuth` for every server-function call, and an `errorMiddleware` that rethrows anything with a `statusCode` (redirects, structured HTTP errors — let these pass through untouched) and converts everything else into `renderErrorPage()`'s generic 500. A plain `throw new Error(...)` where you meant `throw redirect(...)` gets swallowed into the generic error page here instead of actually redirecting.
+- **`server.ts`** — the real Cloudflare Workers entry point (`vite.config.ts` points `tanstackStart.server.entry` here instead of the framework default). Applies `SECURITY_HEADERS`/CSP to every response, and works around an h3 bug where an in-handler throw gets flattened into an opaque `{"unhandled":true}` JSON 500 that bypasses normal error rendering — `normalizeCatastrophicSsrResponse()` detects that specific shape and swaps in the real error via `error-capture.ts`. **Note the CSP's `connect-src`/`img-src` hardcode this project's specific Supabase project URL** (not read from an env var) — pointing the app at a different Supabase project means updating this file too, or Storage images/API calls/realtime will be silently blocked by the browser, not by Supabase.

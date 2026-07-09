@@ -9,8 +9,8 @@ This app runs on **Lovable Cloud** (a managed Supabase project) but is designed 
 | Postgres database | Supabase Postgres | Migrations in `supabase/migrations/` |
 | Auth (email/password) | Supabase Auth | `src/lib/auth-context.tsx`, `src/routes/auth.tsx`, `src/routes/_authenticated/route.tsx` |
 | Row-level security | Postgres RLS policies | Migrations |
-| File storage | Supabase Storage bucket `bucket-photos` | `src/components/bucket-item-dialog.tsx` (upload + signed URLs) |
-| Realtime updates | Supabase Realtime (Postgres CDC) | `src/routes/_authenticated/bucket.tsx`, `src/routes/_authenticated/calendar.tsx` |
+| File storage | Supabase Storage buckets `bucket-photos`, `avatars` | `src/routes/_authenticated/journal.tsx` (Journal photo upload + signed URLs), `src/routes/_authenticated/settings.tsx` (avatar upload) |
+| Realtime updates | Supabase Realtime (Postgres CDC) | `src/routes/_authenticated/bucket.tsx`, `src/routes/_authenticated/calendar.tsx`, `src/routes/_authenticated/journal.tsx` |
 | Client SDK | `@supabase/supabase-js` via `src/integrations/supabase/client.ts` (auto-generated) | Every route/component that reads or writes data |
 
 All of these are open protocols or standard SQL — nothing is Supabase-proprietary at the data layer.
@@ -64,14 +64,37 @@ CREATE TABLE calendar_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Journal tab: shared photos + notes on completed items. Unlike every table
+-- above, these are shared-write (see security rules below) -- any signed-in
+-- user can add/edit/delete any row, not just their own.
+CREATE TABLE journal_photos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bucket_item_id UUID NOT NULL REFERENCES bucket_items(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  caption TEXT,
+  created_by UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE journal_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bucket_item_id UUID NOT NULL REFERENCES bucket_items(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_by UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
 
 ### Security rules (in plain English)
 
 - `allowed_emails`: signed-in users can read, add, and remove entries. The list gates who can create a profile.
 - `profiles`: any signed-in user can read all profiles (needed to show "done by …"). A user can only insert their own profile, and only if their email is on the allowlist. Only the owner can update their profile.
-- `bucket_items` and `calendar_events`: any signed-in user can read/insert/update/delete every row. This is intentional — the whole app is a two-person shared workspace.
-- `bucket-photos` storage bucket: any signed-in user can read/write/delete files.
+- `bucket_items` and `calendar_events`: any signed-in user can read/insert every row, but only the row's creator can update/delete it.
+- `journal_photos`: any signed-in user can read/insert/update/delete every row (fully shared — a memory book only works if both people can fix a caption or remove a bad photo).
+- `journal_notes`: any signed-in user can read/insert every row, but only the creator can update/delete their own note.
+- `bucket-photos` / `avatars` storage buckets: any signed-in user can read every file; writes are scoped to your own `<user_id>/` folder.
 
 If you move to a stack **without RLS**, enforce these rules in your API layer instead. If you don't need the "invite-only" gate at all (e.g. you're the only server that creates accounts), you can drop `allowed_emails` and the `is_email_allowed` RPC.
 

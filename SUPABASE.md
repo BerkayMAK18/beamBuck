@@ -73,7 +73,7 @@ The core table. One row per bucket-list entry.
 | `status` | `bucket_status` NOT NULL | Default `'planned'`. Set to `'done'` when checked off. |
 | `completed_by` | `uuid` | FK → `profiles(id) ON DELETE SET NULL`. Set when marked done. |
 | `completed_at` | `timestamptz` | Set when marked done. |
-| `image_urls` | `text[]` NOT NULL | Signed URLs into the `bucket-photos` bucket. Default `'{}'`. |
+| `image_urls` | `text[]` NOT NULL | **Legacy, no longer written to.** Signed URLs into the `bucket-photos` bucket; superseded by `journal_photos` below (migration `20260709090000`, which one-time-backfilled every existing `image_urls` entry into `journal_photos`). Still present so nothing breaks if old code/exports reference it, but the Journal UI reads/writes `journal_photos` exclusively. Default `'{}'`. |
 | `links` | `text[]` NOT NULL | Reserved (currently unused by the UI). Default `'{}'`. |
 | `created_by` | `uuid` NOT NULL | FK → `profiles(id) ON DELETE CASCADE`. Owner of the row. |
 | `created_at` / `updated_at` | `timestamptz` | Managed by `set_updated_at`. |
@@ -94,6 +94,32 @@ Mirror table kept in sync with `bucket_items` by triggers. The current Calendar 
 | `created_by` | `uuid` NOT NULL | FK → `profiles(id) ON DELETE CASCADE`. |
 | `created_at` / `updated_at` | `timestamptz` | |
 
+### `public.journal_photos`
+
+Added by migration `20260709090000_add_journal_photos_and_notes.sql`. One row per photo attached to a completed item's Journal entry (`src/routes/_authenticated/journal.tsx`). Unlike `bucket_items`, this is a **shared-write** table — see the RLS note below.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | Default `gen_random_uuid()`. |
+| `bucket_item_id` | `uuid` NOT NULL | FK → `bucket_items(id) ON DELETE CASCADE`. |
+| `url` | `text` NOT NULL | Signed URL into the `bucket-photos` bucket (same bucket the legacy `image_urls` column pointed at). |
+| `caption` | `text` | Nullable, editable in the Journal UI. |
+| `created_by` | `uuid` NOT NULL | FK → `profiles(id) ON DELETE CASCADE`. Whoever uploaded it — not necessarily the bucket item's owner. |
+| `created_at` | `timestamptz` NOT NULL | Default `now()`. |
+
+### `public.journal_notes`
+
+Added by the same migration; a lightweight comment thread per completed item.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | Default `gen_random_uuid()`. |
+| `bucket_item_id` | `uuid` NOT NULL | FK → `bucket_items(id) ON DELETE CASCADE`. |
+| `body` | `text` NOT NULL | |
+| `created_by` | `uuid` NOT NULL | FK → `profiles(id) ON DELETE CASCADE`. |
+| `created_at` | `timestamptz` NOT NULL | Default `now()`. |
+| `updated_at` | `timestamptz` NOT NULL | Added by the follow-up migration `20260709120000`; maintained by `set_journal_notes_updated_at`. The Journal UI shows "· edited" when this differs from `created_at`. |
+
 ---
 
 ## 3. Storage buckets
@@ -102,7 +128,7 @@ Both buckets are **private** (no anonymous read). Signed URLs (365-day) are gene
 
 | Bucket | Purpose | Path convention |
 |---|---|---|
-| `bucket-photos` | Photos uploaded from the Gallery tab | `<user_id>/<timestamp>-<filename>` |
+| `bucket-photos` | Photos uploaded from the Journal tab (via `journal_photos.url`) | `<user_id>/<timestamp>-<filename>` |
 | `avatars` | Profile pictures from Settings | `<user_id>/avatar-<timestamp>.<ext>` |
 
 The path convention matters — the RLS policies below extract the first folder segment and require it to equal `auth.uid()::text`.
@@ -123,7 +149,7 @@ All are defined in `SET search_path = public` for safety.
 `SECURITY DEFINER`. Fires `AFTER INSERT ON auth.users`. Inserts a matching row into `profiles` with `display_name` from `raw_user_meta_data->>'display_name'` (falling back to the email prefix). `ON CONFLICT (id) DO NOTHING`.
 
 ### `set_updated_at()` — trigger
-Plain `plpgsql`. Fires `BEFORE UPDATE` on every table with an `updated_at` column.
+Plain `plpgsql`. Fires `BEFORE UPDATE` on every table with an `updated_at` column, including `journal_notes` (added by migration `20260709120000` — `journal_photos` has no `updated_at`/edit trigger since only its caption is editable and that's handled entirely by RLS, no timestamp tracked).
 
 ### `sync_bucket_to_calendar()` — trigger
 `SECURITY DEFINER`. Fires `AFTER INSERT OR UPDATE ON bucket_items`. Uses `pg_trigger_depth()` to prevent recursion. Behaviour:
@@ -162,6 +188,7 @@ CREATE TRIGGER on_auth_user_created
 CREATE TRIGGER set_profiles_updated_at        BEFORE UPDATE ON public.profiles        FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER set_bucket_items_updated_at    BEFORE UPDATE ON public.bucket_items    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER set_calendar_events_updated_at BEFORE UPDATE ON public.calendar_events FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER set_journal_notes_updated_at   BEFORE UPDATE ON public.journal_notes  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- bucket_items ⇄ calendar_events sync
 CREATE TRIGGER sync_bucket_to_calendar_ins_upd
@@ -193,9 +220,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.allowed_emails   TO authenticated
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.bucket_items     TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.calendar_events  TO authenticated;
 GRANT SELECT                          ON public.user_roles      TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.journal_photos   TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.journal_notes    TO authenticated;
 
 GRANT ALL ON public.profiles, public.allowed_emails, public.bucket_items,
-            public.calendar_events, public.user_roles TO service_role;
+            public.calendar_events, public.user_roles,
+            public.journal_photos, public.journal_notes TO service_role;
 ```
 
 No `anon` grants — every read requires a signed-in user.
@@ -264,7 +294,7 @@ Storage policies live on `storage.objects`. Both buckets are private; SELECT is 
 
 | Action | Policy |
 |---|---|
-| SELECT | `bucket_id = 'bucket-photos'` (any signed-in user reads any photo — Gallery is shared). |
+| SELECT | `bucket_id = 'bucket-photos'` (any signed-in user reads any photo — the Journal is shared). |
 | INSERT | `bucket_id = 'bucket-photos' AND (storage.foldername(name))[1] = auth.uid()::text`. |
 | UPDATE | same. |
 | DELETE | same. |

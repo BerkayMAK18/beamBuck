@@ -1,7 +1,7 @@
 # Bucket List App
 
 A private, invite-only shared bucket list and calendar for two (or a few) people.
-You add things you want to do together, give them a date/time, mark them done, and upload photos of them in a Gallery when you actually get around to them.
+You add things you want to do together, give them a date/time, mark them done, and add photos and notes to a shared Journal entry when you actually get around to them.
 
 Built on **TanStack Start** (React 19 + Vite) with **Supabase** for auth, database, storage and realtime. It's designed as a single, self-hostable app — everything user-facing lives in the frontend, and everything server-side is standard Postgres + Supabase (RLS + triggers + a storage bucket). No custom backend server to run.
 
@@ -12,7 +12,7 @@ Built on **TanStack Start** (React 19 + Vite) with **Supabase** for auth, databa
 - Email + password auth, gated by an allowlist you control from the Settings tab.
 - **Bucket** tab — three states per item: **Backlog** (no date), **Planned** (has a date), **Done** (completed).
 - **Calendar** tab — a mirrored, chronological view of everything **planned**, grouped by day.
-- **Gallery** tab — every **done** item as a card with photo uploads and a lightbox, sortable by completion date.
+- **Journal** tab — every **done** item as a card with shared photo uploads (with captions, a lightbox, and save-to-device download), a comment thread, and sortable by completion date.
 - **Settings** tab — edit your display name, upload an avatar, manage the invite allowlist.
 - Shared realtime updates (both users see each other's changes without refreshing).
 - Per-item photos stored in Supabase Storage; user avatars in a separate bucket.
@@ -54,15 +54,17 @@ Package manager: `bun` (a `bunfig.toml` is included). `npm`/`pnpm` also work —
 │   │       ├── route.tsx           # Auth gate: redirects to /auth if no session
 │   │       ├── calendar.tsx        # "/calendar" — planned items grouped by day
 │   │       ├── bucket.tsx          # "/bucket"   — full bucket list with filters
-│   │       ├── gallery.tsx         # "/gallery"  — done items + photos
+│   │       ├── journal.tsx        # "/journal"  — done items + shared photos/notes
 │   │       └── settings.tsx        # "/settings" — profile + invite allowlist
 │   ├── components/
 │   │   ├── app-shell.tsx           # Top nav, mobile bottom nav, sign-out button
 │   │   ├── bucket-item-dialog.tsx  # Create / edit dialog + BucketItem type + CATEGORIES
-│   │   ├── event-dialog.tsx        # (legacy calendar dialog, unused by current UI)
+│   │   ├── event-dialog.tsx        # (unwired calendar-event dialog, not used by current UI)
+│   │   ├── avatar-crop-dialog.tsx  # Circular crop/zoom UI for avatar uploads
 │   │   └── ui/                     # shadcn/ui primitives (Button, Card, Dialog, …)
 │   ├── lib/
 │   │   ├── auth-context.tsx        # <AuthProvider> + useAuth() hook
+│   │   ├── image.ts                # HEIC-aware decode, JPEG re-encode, save-to-device
 │   │   ├── utils.ts                # cn() helper
 │   │   └── (error reporting helpers used by TanStack error boundaries)
 │   ├── integrations/supabase/      # Auto-generated Supabase client + TS types
@@ -141,6 +143,8 @@ SUPABASE_PROJECT_ID="<your-project-ref>"
 
 > The **publishable / anon** key is safe to ship in a client bundle — Row Level Security is what actually protects your data. The **service role** key must stay server-only.
 
+**Local dev shortcut, no hosted project needed:** if you have Docker running, `supabase start` (from the repo root) brings up a complete local Postgres/Auth/Storage stack and applies every migration automatically — no signup, no allowlist friction, fully disposable. It prints a block of local keys/URLs; put the local `URL`/`PUBLISHABLE_KEY` values into a `.env.local` file (same shape as `.env` above) instead of `.env` — Vite loads `.env.local` with higher priority, so `bun run dev` picks up the local backend automatically as long as that file exists, and you can delete it any time to fall back to `.env`. Local Studio (a GUI for browsing/editing tables) is at `http://127.0.0.1:54323`; local Mailpit (catches "sent" emails like signup confirmations, since the local stack doesn't really send mail) is at `http://127.0.0.1:54324`. Tear it down with `supabase stop`; `supabase db reset` wipes the local DB and reapplies every migration from scratch.
+
 ### 5. Run the dev server
 
 ```bash
@@ -200,7 +204,7 @@ If/when you want to retry GitHub Pages: bump `nitro`, `vite`, and `@tanstack/rea
 
 ## Where to look next
 
-- **`DEVELOPER_GUIDE.md`** — the deep reference: complete live database schema, the auth/security model and its sharp edges, the deployment pipeline, every tool in the stack and why it's there, and a practical guide to adding your own features. Start here if you're building something new.
+- **`DEVELOPER_GUIDE.md`** — the deep reference: complete live database schema, a file-by-file codebase tour (every route/component/lib file, what it does, and the gotcha to know before touching it), the auth/security model and its sharp edges, the deployment pipeline, every tool in the stack and why it's there, and a practical guide to adding your own features. Start here if you're building something new.
 - **`SUPABASE.md`** — every table, column, storage bucket, RLS policy, function, and trigger, so you can recreate the backend on a fresh Supabase project.
 - **`CUSTOMIZING.md`** — how to rename the app, change categories, tweak the design system, change how Backlog/Planned/Done are computed, and where uploads land in storage.
 - **`PORTABILITY.md`** — notes on moving to a non-Supabase backend.
