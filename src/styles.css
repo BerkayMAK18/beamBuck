@@ -55,6 +55,18 @@
   --color-blush: var(--blush);
   --color-sky: var(--sky);
   --color-sunset: var(--sunset);
+  --color-cat-travel: var(--cat-travel);
+  --color-cat-travel-foreground: var(--cat-travel-foreground);
+  --color-cat-food: var(--cat-food);
+  --color-cat-food-foreground: var(--cat-food-foreground);
+  --color-cat-adventure: var(--cat-adventure);
+  --color-cat-adventure-foreground: var(--cat-adventure-foreground);
+  --color-cat-learn: var(--cat-learn);
+  --color-cat-learn-foreground: var(--cat-learn-foreground);
+  --color-cat-together: var(--cat-together);
+  --color-cat-together-foreground: var(--cat-together-foreground);
+  --color-cat-create: var(--cat-create);
+  --color-cat-create-foreground: var(--cat-create-foreground);
 }
 
 :root {
@@ -89,6 +101,19 @@
   --blush: oklch(0.82 0.09 5);
   --sky: oklch(0.87 0.06 240);
   --sunset: oklch(0.85 0.09 60);
+  /* Category chips — one pastel per category, same lightness so none dominates */
+  --cat-travel: oklch(0.9 0.07 200);
+  --cat-travel-foreground: oklch(0.35 0.08 200);
+  --cat-food: oklch(0.9 0.07 55);
+  --cat-food-foreground: oklch(0.35 0.08 55);
+  --cat-adventure: oklch(0.9 0.07 150);
+  --cat-adventure-foreground: oklch(0.35 0.08 150);
+  --cat-learn: oklch(0.9 0.07 95);
+  --cat-learn-foreground: oklch(0.35 0.08 95);
+  --cat-together: oklch(0.9 0.07 5);
+  --cat-together-foreground: oklch(0.35 0.08 5);
+  --cat-create: oklch(0.9 0.07 300);
+  --cat-create-foreground: oklch(0.35 0.08 300);
   --sidebar: oklch(0.98 0.012 60);
   --sidebar-foreground: oklch(0.38 0.03 255);
   --sidebar-primary: oklch(0.82 0.09 5);
@@ -132,6 +157,18 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+  --cat-travel: oklch(0.35 0.07 200);
+  --cat-travel-foreground: oklch(0.92 0.05 200);
+  --cat-food: oklch(0.35 0.07 55);
+  --cat-food-foreground: oklch(0.92 0.05 55);
+  --cat-adventure: oklch(0.35 0.07 150);
+  --cat-adventure-foreground: oklch(0.92 0.05 150);
+  --cat-learn: oklch(0.35 0.07 95);
+  --cat-learn-foreground: oklch(0.92 0.05 95);
+  --cat-together: oklch(0.35 0.07 5);
+  --cat-together-foreground: oklch(0.92 0.05 5);
+  --cat-create: oklch(0.35 0.07 300);
+  --cat-create-foreground: oklch(0.92 0.05 300);
 }
 
 @layer base {

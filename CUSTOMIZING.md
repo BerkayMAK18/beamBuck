@@ -10,18 +10,20 @@ All changes are frontend-only unless called out otherwise. After editing, `bun r
 
 The category dropdown in the "Add/Edit item" dialog is a plain hardcoded array. `category` in the DB is a nullable free-text column, so old items with removed categories keep working.
 
-**File:** `src/components/bucket-item-dialog.tsx`
+**File:** `src/lib/categories.ts`
 
 ```ts
-const CATEGORIES = ["Travel", "Food", "Adventure", "Learn", "Together", "Create"];
+export const CATEGORIES = ["Travel", "Food", "Adventure", "Learn", "Together", "Create"];
 ```
 
 Add, remove, or rename entries as you like. Categories are stored on `bucket_items.category` verbatim.
 
-If you want more structure (e.g. an icon per category, or a color badge), the display sites are:
+Each category has its own chip color, rendered by `<CategoryBadge>` (`src/components/category-badge.tsx`) on the Bucket list, Calendar and Journal. The colors are `--cat-<name>` / `--cat-<name>-foreground` tokens in `src/styles.css` (`:root` and `.dark`). To color a new category:
 
-- `src/routes/_authenticated/bucket.tsx` — the `<Badge variant="secondary">{item.category}</Badge>` rendering the category chip on each card.
-- `src/routes/_authenticated/calendar.tsx` — same badge inside each day group.
+1. Add the two tokens to `:root` and `.dark`, plus the matching `--color-cat-<name>` lines in the `@theme inline` block.
+2. Add an entry to `CATEGORY_CLASSES` in `category-badge.tsx`. Write the class names out in full — Tailwind only generates classes it can find literally in the source.
+
+A category without an entry (e.g. one you removed but old rows still use) falls back to the plain sky-blue `secondary` badge.
 
 > Renaming a category **doesn't rewrite existing rows**. If you rename "Travel" → "Trips", old items keep `category = "Travel"`. Either run a one-off `UPDATE public.bucket_items SET category = 'Trips' WHERE category = 'Travel';` from the SQL editor, or leave both.
 
@@ -236,7 +238,8 @@ If you don't want realtime (e.g. to reduce Supabase bandwidth), delete the `.cha
 
 | I want to change… | Look at… |
 |---|---|
-| Category list | `src/components/bucket-item-dialog.tsx` → `CATEGORIES` |
+| Category list | `src/lib/categories.ts` → `CATEGORIES` |
+| Category colors | `src/styles.css` (`--cat-*`) + `src/components/category-badge.tsx` |
 | Colors / theme | `src/styles.css` (`:root` + `.dark`) |
 | Fonts | `src/routes/__root.tsx` (imports) + `src/styles.css` (`--font-*` tokens) |
 | App name | `src/components/app-shell.tsx` + `src/routes/auth.tsx` + `src/routes/__root.tsx` head |

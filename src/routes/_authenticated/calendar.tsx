@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import type { BucketItem } from "@/components/bucket-item-dialog";
+import { CategoryBadge } from "@/components/category-badge";
 import { CalendarHeart } from "lucide-react";
 import { format, parseISO, isSameDay, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
@@ -116,7 +116,7 @@ function CalendarPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="text-sm font-medium leading-snug">{it.title}</div>
                           {it.category && (
-                            <Badge variant="secondary" className="rounded-full text-[10px] shrink-0">{it.category}</Badge>
+                            <CategoryBadge category={it.category} className="rounded-full text-[10px] shrink-0" />
                           )}
                         </div>
                         {creator && (

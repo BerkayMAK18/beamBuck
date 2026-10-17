@@ -8,9 +8,9 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { BucketItem } from "@/components/bucket-item-dialog";
+import { CategoryBadge } from "@/components/category-badge";
 import { decodeImageBlob, bitmapToJpegBlob, downloadImage } from "@/lib/image";
 import {
   Upload, BookHeart, X, ChevronLeft, ChevronRight, Calendar as CalIcon, ArrowUpDown, ImageOff, Send, Pencil, Loader2, Info, Download,
@@ -290,7 +290,7 @@ function JournalPage() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                    {item.category && <Badge variant="secondary" className="rounded-full text-[10px]">{item.category}</Badge>}
+                    {item.category && <CategoryBadge category={item.category} className="rounded-full text-[10px]" />}
                     {when && (
                       <span className="inline-flex items-center gap-1">
                         <CalIcon className="w-3 h-3" /> {when}

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { BucketItemDialog, type BucketItem } from "@/components/bucket-item-dialog";
+import { CategoryBadge } from "@/components/category-badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -165,7 +166,7 @@ function BucketPage() {
                     </div>
                     {item.notes && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{item.notes}</p>}
                     <div className="flex flex-wrap gap-2 mt-3 text-xs">
-                      {item.category && <Badge variant="secondary" className="rounded-full">{item.category}</Badge>}
+                      {item.category && <CategoryBadge category={item.category} className="rounded-full" />}
                       {item.target_date && (
                         <Badge variant="outline" className="rounded-full gap-1">
                           <CalIcon className="w-3 h-3" />

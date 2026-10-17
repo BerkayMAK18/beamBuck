@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { CATEGORIES } from "@/lib/categories";
 import { toast } from "sonner";
 
 export type BucketItem = {
@@ -23,8 +24,6 @@ export type BucketItem = {
   created_by: string;
   created_at: string;
 };
-
-const CATEGORIES = ["Travel", "Food", "Adventure", "Learn", "Together", "Create"];
 
 export function BucketItemDialog({
   open, onOpenChange, item, defaultTargetDate, onSaved,
